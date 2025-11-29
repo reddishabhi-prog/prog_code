@@ -1,0 +1,161 @@
+//@version=5
+indicator("Structure Marking - Impulse & Correction", overlay=true, max_lines_count=500, max_labels_count=500)
+
+// Input Settings
+showBullish = input.bool(true, "Show Bullish Structure", group="Display")
+showBearish = input.bool(true, "Show Bearish Structure", group="Display")
+bullishColor = input.color(color.new(color.green, 0), "Bullish Color", group="Colors")
+bearishColor = input.color(color.new(color.red, 0), "Bearish Color", group="Colors")
+breakColor = input.color(color.new(color.blue, 0), "Structure Break Color", group="Colors")
+
+// Variables to track structure
+var float lastConfirmedHigh = na
+var float lastConfirmedLow = na
+var int lastConfirmedHighBar = na
+var int lastConfirmedLowBar = na
+var float pendingHigh = na
+var float pendingLow = na
+var int pendingHighBar = na
+var int pendingLowBar = na
+var string currentStructure = "neutral" // "bullish" or "bearish"
+var int retraceCount = 0
+var bool isRetracingFromHigh = false
+var bool isRetracingFromLow = false
+
+// Function to check for 2 consecutive red candles closing below
+isTwoRedCandlesBelow() =>
+    if bar_index < 1
+        false
+    else
+        candle1Red = close[1] < open[1]
+        candle2Red = close < open
+        closingBelow = close < close[1]
+        candle1Red and candle2Red and closingBelow
+
+// Function to check for 2 consecutive green candles closing above
+isTwoGreenCandlesAbove() =>
+    if bar_index < 1
+        false
+    else
+        candle1Green = close[1] > open[1]
+        candle2Green = close > open
+        closingAbove = close > close[1]
+        candle1Green and candle2Green and closingAbove
+
+// Detect structure
+bool twoRedBelow = isTwoRedCandlesBelow()
+bool twoGreenAbove = isTwoGreenCandlesAbove()
+
+// BULLISH STRUCTURE LOGIC
+if showBullish
+    // Detect new potential high
+    if not isRetracingFromHigh and high > nz(pendingHigh, high)
+        pendingHigh := high
+        pendingHighBar := bar_index
+    
+    // Check for 2 candle retracement from high (2 consecutive red candles closing below)
+    if not na(pendingHigh) and twoRedBelow and not isRetracingFromHigh
+        isRetracingFromHigh := true
+        retraceCount := 2
+        // Confirm the high
+        lastConfirmedHigh := pendingHigh
+        lastConfirmedHighBar := pendingHighBar
+        
+        // Draw line for confirmed high
+        line.new(lastConfirmedHighBar, lastConfirmedHigh, bar_index, lastConfirmedHigh, 
+                 color=bullishColor, width=2, style=line.style_solid)
+        label.new(lastConfirmedHighBar, lastConfirmedHigh, "H", 
+                  color=bullishColor, textcolor=color.white, style=label.style_label_down, size=size.small)
+    
+    // After high is confirmed, look for low confirmation (close above high)
+    if isRetracingFromHigh and not na(lastConfirmedHigh)
+        // Track the low during retracement
+        if na(pendingLow) or low < pendingLow
+            pendingLow := low
+            pendingLowBar := bar_index
+        
+        // Confirm low when price closes above the confirmed high
+        if close > lastConfirmedHigh
+            if not na(pendingLow)
+                lastConfirmedLow := pendingLow
+                lastConfirmedLowBar := pendingLowBar
+                
+                // Draw line for confirmed low
+                line.new(lastConfirmedLowBar, lastConfirmedLow, bar_index, lastConfirmedLow, 
+                         color=bullishColor, width=2, style=line.style_solid)
+                label.new(lastConfirmedLowBar, lastConfirmedLow, "L", 
+                          color=bullishColor, textcolor=color.white, style=label.style_label_up, size=size.small)
+                
+                // Draw structure break line (dashed with arrow)
+                line.new(lastConfirmedHighBar, lastConfirmedHigh, bar_index, lastConfirmedHigh, 
+                         color=breakColor, width=1, style=line.style_dashed, extend=extend.right)
+                label.new(bar_index, lastConfirmedHigh, "▲", 
+                          color=color.new(breakColor, 100), textcolor=breakColor, style=label.style_none, size=size.normal)
+                
+                currentStructure := "bullish"
+            
+            // Reset for next structure
+            isRetracingFromHigh := false
+            pendingHigh := na
+            pendingLow := na
+            pendingHighBar := na
+            pendingLowBar := na
+
+// BEARISH STRUCTURE LOGIC
+if showBearish
+    // Detect new potential low
+    if not isRetracingFromLow and low < nz(pendingLow, low)
+        pendingLow := low
+        pendingLowBar := bar_index
+    
+    // Check for 2 candle retracement from low (2 consecutive green candles closing above)
+    if not na(pendingLow) and twoGreenAbove and not isRetracingFromLow
+        isRetracingFromLow := true
+        retraceCount := 2
+        // Confirm the low
+        lastConfirmedLow := pendingLow
+        lastConfirmedLowBar := pendingLowBar
+        
+        // Draw line for confirmed low
+        line.new(lastConfirmedLowBar, lastConfirmedLow, bar_index, lastConfirmedLow, 
+                 color=bearishColor, width=2, style=line.style_solid)
+        label.new(lastConfirmedLowBar, lastConfirmedLow, "L", 
+                  color=bearishColor, textcolor=color.white, style=label.style_label_up, size=size.small)
+    
+    // After low is confirmed, look for high confirmation (close below low)
+    if isRetracingFromLow and not na(lastConfirmedLow)
+        // Track the high during retracement
+        if na(pendingHigh) or high > pendingHigh
+            pendingHigh := high
+            pendingHighBar := bar_index
+        
+        // Confirm high when price closes below the confirmed low
+        if close < lastConfirmedLow
+            if not na(pendingHigh)
+                lastConfirmedHigh := pendingHigh
+                lastConfirmedHighBar := pendingHighBar
+                
+                // Draw line for confirmed high
+                line.new(lastConfirmedHighBar, lastConfirmedHigh, bar_index, lastConfirmedHigh, 
+                         color=bearishColor, width=2, style=line.style_solid)
+                label.new(lastConfirmedHighBar, lastConfirmedHigh, "H", 
+                          color=bearishColor, textcolor=color.white, style=label.style_label_down, size=size.small)
+                
+                // Draw structure break line (dashed with arrow)
+                line.new(lastConfirmedLowBar, lastConfirmedLow, bar_index, lastConfirmedLow, 
+                         color=breakColor, width=1, style=line.style_dashed, extend=extend.right)
+                label.new(bar_index, lastConfirmedLow, "▼", 
+                          color=color.new(breakColor, 100), textcolor=breakColor, style=label.style_none, size=size.normal)
+                
+                currentStructure := "bearish"
+            
+            // Reset for next structure
+            isRetracingFromLow := false
+            pendingHigh := na
+            pendingLow := na
+            pendingHighBar := na
+            pendingLowBar := na
+
+// Plot current structure type
+bgcolor(currentStructure == "bullish" ? color.new(bullishColor, 95) : 
+        currentStructure == "bearish" ? color.new(bearishColor, 95) : na)
